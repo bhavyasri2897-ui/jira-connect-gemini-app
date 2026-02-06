@@ -66,13 +66,9 @@ app.get("/atlassian-connect.json", (req, res) => {
       url: "https://Ascendion.com"
     },
 
-    authentication: {
-      type: "none"
-    },
+    authentication: { type: "none" },
 
-    apiMigrations: {
-      gdpr: true
-    },
+    apiMigrations: { gdpr: true },
 
     scopes: ["read", "write", "act_as_user", "admin"],
 
@@ -84,52 +80,9 @@ app.get("/atlassian-connect.json", (req, res) => {
           key: "my-issue-content-panel",
           name: { value: "Digital Ascender" },
           icon: { url: "/public/icon.png" },
-
-          // ✅ REQUIRED for install (fixes connect.install.error.missing.url)
           url: "/public/issue-panel.html",
           location: "atl.jira.view.issue.right.context",
-
           tooltip: { value: "A.AVA Digital Ascender" },
-          contentPresentConditions: [
-            { condition: "user_is_admin", invert: false }
-          ],
-          jiraNativeAppsEnabled: false
-        }
-      ],
-
-      webItems: [
-        {
-          key: "board-custom-action",
-          location: "jira.software.board.tools",
-          name: { value: "AVA+ Digi Sprinter" },
-          context: "addon",
-          tooltip: { value: "AVA+ Digi Sprinter" },
-          weight: 10,
-          icon: {
-            url: "/public/avaplus.png",
-            width: 24,
-            height: 24
-          },
-          contentPresentConditions: [
-            { condition: "user_is_admin", invert: false }
-          ],
-          jiraNativeAppsEnabled: false
-        },
-        {
-          key: "backlog-custom-action",
-          location: "jira.software.backlog.tools",
-          name: { value: "AVA+ Digi Sprinter" },
-          context: "addon",
-          tooltip: { value: "AVA+ Digi Sprinter" },
-          weight: 20,
-          icon: {
-            url: "/public/avaplus.png",
-            width: 24,
-            height: 24
-          },
-          contentPresentConditions: [
-            { condition: "user_is_admin", invert: false }
-          ],
           jiraNativeAppsEnabled: false
         }
       ],
@@ -140,18 +93,19 @@ app.get("/atlassian-connect.json", (req, res) => {
         name: { value: "Configure A.AVA Digital Ascender" }
       },
 
-      webhooks: [
-        {
-          event: "jira:issue_updated",
-          url: "/issue-updated",
-          excludeBody: false
-        }
-      ]
+    //   webhooks: [
+    //     {
+    //       event: "jira:issue_updated",
+    //       url: "/issue-updated",
+    //       excludeBody: false
+    //     }
+    //   ]
     }
   };
 
   res.status(200).type("application/json").json(descriptor);
 });
+
 
 
 

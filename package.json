@@ -2,18 +2,17 @@
   "name": "jira-plugin-connect",
   "version": "1.0.0",
   "main": "index.js",
-  
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js"
   },
-
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
     "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "node-fetch": "^3.3.2"
   },

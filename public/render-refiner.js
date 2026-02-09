@@ -4,66 +4,38 @@ function qs(name) {
 
 const issueKey = qs("issueKey");
 
-const metaEl = document.getElementById("meta");
+const btnRefine = document.getElementById("btnRefine");
 const statusEl = document.getElementById("status");
-const promptBox = document.getElementById("promptBox");
-const outputBox = document.getElementById("outputBox");
-const btnCall = document.getElementById("btnCall");
+const refinedDescEl = document.getElementById("refinedDesc");
 
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
-
 function setLoading(isLoading) {
-  btnCall.disabled = isLoading;
-  btnCall.textContent = isLoading ? "⏳ Refining..." : "✨ Refine with Gemini";
+  btnRefine.disabled = isLoading;
+  btnRefine.textContent = isLoading ? "⏳ Working..." : "✨ Refine with Gemini";
 }
 
-metaEl.textContent = issueKey ? `Issue: ${issueKey}` : "Issue: (missing issueKey)";
-
 /**
- * Jira Cloud description is often ADF (Atlassian Document Format).
- * This function extracts readable text from ADF JSON.
+ * Convert Jira ADF (description object) -> plain text
  */
 function adfToText(node) {
   if (!node) return "";
-
-  // If it's already a string (rare), return directly
   if (typeof node === "string") return node;
-
-  // If it's an array of nodes
   if (Array.isArray(node)) return node.map(adfToText).join("");
 
-  // Text node
   if (node.type === "text") return node.text || "";
-
-  // Hard break
   if (node.type === "hardBreak") return "\n";
 
-  // Paragraph / heading / listItem etc - add line breaks between blocks
-  const blockTypes = new Set([
-    "paragraph",
-    "heading",
-    "blockquote",
-    "listItem",
-    "codeBlock",
-    "panel",
-    "tableRow",
-  ]);
-
-  const contentText = adfToText(node.content || []);
-
-  if (blockTypes.has(node.type)) return contentText + "\n";
-
-  return contentText;
+  const blockTypes = new Set(["paragraph", "heading", "blockquote", "listItem"]);
+  const text = adfToText(node.content || []);
+  return blockTypes.has(node.type) ? text + "\n" : text;
 }
-function onGeminiClick(){
-  alert("Gemini Clicked")
-}
-function getIssueFromJira(issueKey) {
+
+function getIssueData(issueKey) {
   return new Promise((resolve, reject) => {
-    if (!window.AP) return reject(new Error("AP is not available. Load inside Jira."));
+    if (!window.AP) return reject(new Error("AP is not available. Open inside Jira."));
     AP.request({
       url: `/rest/api/3/issue/${issueKey}?fields=summary,description`,
       type: "GET",
@@ -91,7 +63,7 @@ async function callGemini(prompt) {
   return data.response || "";
 }
 
-btnCall.addEventListener("click", async () => {
+btnRefine.addEventListener("click", async () => {
   if (!issueKey) {
     setStatus("❌ Missing issueKey in URL");
     return;
@@ -99,48 +71,32 @@ btnCall.addEventListener("click", async () => {
 
   try {
     setLoading(true);
-    outputBox.value = "";
-    setStatus("1/3 Fetching current Jira description…");
+    refinedDescEl.value = "";
 
-    // ✅ 1) Get current issue description from Jira
-    const issue = await getIssueFromJira(issueKey);
+    setStatus("1/3 Fetching Jira description…");
+    const issue = await getIssueData(issueKey);
+
     const summary = issue?.fields?.summary || "";
     const descADF = issue?.fields?.description || null;
-
     const descText = adfToText(descADF).trim();
-    if (!descText) {
-      setStatus("⚠️ Issue has no description. Still calling Gemini with summary.");
-    }
 
-    // ✅ 2) Build prompt
+    setStatus("2/3 Calling Gemini…");
+
     const prompt =
-      `Analyze the input Jira ticket description and rewrite it in a structured and professional manner.\n\n` +
+      `Analyze the Jira ticket and rewrite professionally.\n\n` +
       `Follow this format:\n` +
-      `1. Problem Summary\n` +
-      `2. Background\n` +
-      `3. Expected Outcome\n` +
-      `4. Acceptance Criteria\n\n` +
+      `1. Problem Summary\n2. Background\n3. Expected Outcome\n4. Acceptance Criteria\n\n` +
       `Issue Key: ${issueKey}\n` +
       `Summary: ${summary}\n\n` +
-      `Description:\n${descText || "(empty)"}\n`;
+      `Description:\n${descText || "(empty)"}`;
 
-    // show user what prompt is being used (optional)
-    promptBox.value = prompt;
+    const output = await callGemini(prompt);
 
-    setStatus("2/3 Calling Gemini API…");
-
-    // ✅ 3) Call backend → Gemini
-    const geminiOutput = await callGemini(prompt);
-
-    // ✅ 4) Show output
-    outputBox.value = geminiOutput;
-    setStatus("✅ Done: Gemini output received.");
+    refinedDescEl.value = output;
+    setStatus("✅ Done.");
   } catch (e) {
     console.error(e);
-    setStatus(
-      "❌ Failed. If description is not loading, check: Jira app scopes (READ) + JWT/auth setup. " +
-        (e?.message || "")
-    );
+    setStatus("❌ " + (e?.message || "Failed"));
   } finally {
     setLoading(false);
   }

@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Atlassian Connect Bridge -->
     <script
       src="https://connect-cdn.atl-paas.net/all.js"
       data-options="resize:true;sizeToParent:true;"
@@ -14,36 +13,21 @@
 
     <style>
       body { font-family: Arial, sans-serif; padding: 12px; }
-      .row { margin-bottom: 10px; }
-      textarea { width: 100%; min-height: 140px; padding: 10px; }
       button { padding: 10px 14px; cursor: pointer; }
-      .muted { color: #666; font-size: 12px; }
-      .box { border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
-      .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+      textarea { width: 100%; min-height: 160px; padding: 10px; margin-top: 12px; }
+      .muted { color: #666; font-size: 12px; margin-top: 10px; }
     </style>
   </head>
 
   <body>
-    <h3 class="row">Refine with Gemini</h3>
+    <button id="btnRefine">✨ Refine with Gemini</button>
 
-    <div class="row muted" id="meta">Loading issue…</div>
+    <div class="muted" id="status">Ready.</div>
 
-    <div class="row box">
-      <div class="muted">Current Description</div>
-      <textarea id="currentDesc" placeholder="Loading from Jira…"></textarea>
-    </div>
-
-    <div class="row actions">
-      <button click="onGeminiClick()" id="btnRefine">✨ Refine with Gemini</button>
-      <button id="btnUpdate" disabled>✅ Update Jira Description</button>
-    </div>
-
-    <div class="row box">
-      <div class="muted">Gemini Output</div>
-      <textarea id="refinedDesc" placeholder="Click Refine to generate…"></textarea>
-    </div>
-
-    <div class="row muted" id="status"></div>
+    <textarea
+      id="refinedDesc"
+      placeholder="Gemini output will appear here…"
+    ></textarea>
 
     <script src="/public/render-refiner.js"></script>
   </body>

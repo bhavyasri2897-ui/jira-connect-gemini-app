@@ -1,61 +1,42 @@
-// public/render-refiner.js
-
 (() => {
-  function qs(name) {
-    return new URLSearchParams(window.location.search).get(name);
-  }
-
-  const issueKey = qs("issueKey");
-
-  const btnRefine = document.getElementById("btnRefine");
+  const btn = document.getElementById("btnRefine");
   const statusEl = document.getElementById("status");
-  const refinedDescEl = document.getElementById("refinedDesc");
-
-  if (!btnRefine || !statusEl || !refinedDescEl) {
-    console.error("Missing UI elements. Check IDs: btnRefine, status, refinedDesc");
-    return;
-  }
+  const outputEl = document.getElementById("output") || document.getElementById("refinedDesc");
 
   function setStatus(msg) {
     statusEl.textContent = msg;
   }
-
-  function setLoading(isLoading) {
-    btnRefine.disabled = isLoading;
-    btnRefine.textContent = isLoading ? "⏳ Working..." : "✨ Refine with Gemini";
+  function setLoading(v) {
+    btn.disabled = v;
+    btn.textContent = v ? "⏳ Working..." : "✨ Refine with Gemini";
   }
+  function qs(name) {
+    return new URLSearchParams(window.location.search).get(name);
+  }
+  const issueKey = qs("issueKey");
 
-  // Convert Jira ADF -> plain text
+  // ADF -> text
   function adfToText(node) {
     if (!node) return "";
     if (typeof node === "string") return node;
     if (Array.isArray(node)) return node.map(adfToText).join("");
-
     if (node.type === "text") return node.text || "";
     if (node.type === "hardBreak") return "\n";
-
-    const blockTypes = new Set(["paragraph", "heading", "blockquote", "listItem"]);
-    const text = adfToText(node.content || []);
-    return blockTypes.has(node.type) ? text + "\n" : text;
+    const block = new Set(["paragraph", "heading", "blockquote", "listItem"]);
+    const t = adfToText(node.content || []);
+    return block.has(node.type) ? t + "\n" : t;
   }
 
-  function getIssueData(issueKey) {
+  function getIssue(issueKey) {
     return new Promise((resolve, reject) => {
-      if (!window.AP) {
-        return reject(new Error("AP is not available. Open this panel inside Jira."));
-      }
-
+      if (!window.AP) return reject(new Error("AP not available (must open inside Jira)"));
       AP.request({
         url: `/rest/api/3/issue/${issueKey}?fields=summary,description`,
         type: "GET",
-        success: (responseText) => {
-          try {
-            resolve(JSON.parse(responseText));
-          } catch (e) {
-            reject(e);
-          }
+        success: (txt) => {
+          try { resolve(JSON.parse(txt)); } catch (e) { reject(e); }
         },
-        error: (err) => reject(err),
+        error: (err) => reject(new Error("AP.request failed: " + JSON.stringify(err))),
       });
     });
   }
@@ -70,50 +51,44 @@
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      // show backend error clearly
-      throw new Error(data?.error || `Gemini API failed (${res.status})`);
+      throw new Error((data?.error || "Gemini API failed") + ` (status ${res.status})`);
     }
-
     return data.response || "";
   }
 
-  btnRefine.addEventListener("click", async () => {
-    if (!issueKey) {
-      setStatus("❌ Missing issueKey in URL");
-      return;
-    }
-
+  btn.addEventListener("click", async () => {
     try {
-      setLoading(true);
-      refinedDescEl.value = "";
+      if (!issueKey) {
+        setStatus("❌ Missing issueKey in URL");
+        return;
+      }
 
-      setStatus("1/3 Fetching Jira description…");
-      const issue = await getIssueData(issueKey);
+      setLoading(true);
+      if (outputEl) outputEl.value = "";
+
+      setStatus("1/3 Reading Jira description…");
+      const issue = await getIssue(issueKey);
 
       const summary = issue?.fields?.summary || "";
-      const descADF = issue?.fields?.description || null;
-      const descText = adfToText(descADF).trim();
+      const descText = adfToText(issue?.fields?.description).trim();
 
-      setStatus("2/3 Calling Gemini API…");
+      setStatus("2/3 Calling /api/gemini…");
       const prompt =
-        `Analyze the Jira ticket and rewrite professionally.\n\n` +
-        `Follow this format:\n` +
-        `1. Problem Summary\n2. Background\n3. Expected Outcome\n4. Acceptance Criteria\n\n` +
-        `Issue Key: ${issueKey}\n` +
-        `Summary: ${summary}\n\n` +
-        `Description:\n${descText || "(empty)"}`;
+        `Rewrite this Jira ticket professionally.\n\n` +
+        `Format:\n1. Problem Summary\n2. Background\n3. Expected Outcome\n4. Acceptance Criteria\n\n` +
+        `Issue: ${issueKey}\nSummary: ${summary}\n\nDescription:\n${descText || "(empty)"}`;
 
-      const output = await callGemini(prompt);
+      const out = await callGemini(prompt);
 
-      refinedDescEl.value = output;
-      setStatus("✅ Done (Gemini API called).");
+      if (outputEl) outputEl.value = out;
+      setStatus("✅ Done (Gemini response received).");
     } catch (e) {
-      console.error(e);
+      console.error("❌ Click flow failed:", e);
       setStatus("❌ " + (e?.message || "Failed"));
     } finally {
       setLoading(false);
     }
   });
 
-  setStatus("Ready. Click the button to call Gemini.");
+  setStatus("Ready. Click the button.");
 })();

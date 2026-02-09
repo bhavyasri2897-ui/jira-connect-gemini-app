@@ -109,13 +109,18 @@ app.get("/render-refiner", (req, res) => {
 app.post("/api/gemini", async (req, res) => {
   try {
     const { prompt } = req.body;
+
     if (!prompt || !prompt.trim()) return res.status(400).json({ error: "prompt required" });
     if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY missing" });
 
-    const MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025";
-    const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:bidiGenerateContent`;
+    // ✅ Prefer text model if available. If not, keep your bidi model.
+    const MODEL = process.env.GEMINI_MODEL || "models/gemini-pro";
+    const isBidi = MODEL.includes("native-audio-preview");
+    const method = isBidi ? "bidiGenerateContent" : "generateContent";
 
-    const response = await fetchFn(url, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:${method}`;
+
+    const r = await fetchFn(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -126,10 +131,10 @@ app.post("/api/gemini", async (req, res) => {
       })
     });
 
-    const data = await response.json();
+    const data = await r.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({
+    if (!r.ok) {
+      return res.status(r.status).json({
         error: data?.error?.message || "Gemini API error",
         details: data
       });
@@ -146,9 +151,10 @@ app.post("/api/gemini", async (req, res) => {
     res.json({ response: text });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Gemini call failed", details: String(err) });
+    res.status(500).json({ error: "Gemini call crashed", details: String(err) });
   }
 });
+
 
 
 

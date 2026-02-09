@@ -6,117 +6,142 @@ const issueKey = qs("issueKey");
 
 const metaEl = document.getElementById("meta");
 const statusEl = document.getElementById("status");
-const currentDescEl = document.getElementById("currentDesc");
-const refinedDescEl = document.getElementById("refinedDesc");
-const btnRefine = document.getElementById("btnRefine");
-const btnUpdate = document.getElementById("btnUpdate");
+const promptBox = document.getElementById("promptBox");
+const outputBox = document.getElementById("outputBox");
+const btnCall = document.getElementById("btnCall");
 
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
+
 function setLoading(isLoading) {
-  btnRefine.disabled = isLoading;
-  btnRefine.textContent = isLoading ? "⏳ Refining..." : "✨ Refine with Gemini";
+  btnCall.disabled = isLoading;
+  btnCall.textContent = isLoading ? "⏳ Refining..." : "✨ Refine with Gemini";
 }
 
-async function loadIssueDescription() {
-  if (!issueKey) {
-    metaEl.textContent = "❌ Missing issueKey in URL";
-    return;
-  }
+metaEl.textContent = issueKey ? `Issue: ${issueKey}` : "Issue: (missing issueKey)";
 
-  metaEl.textContent = `Issue: ${issueKey}`;
+/**
+ * Jira Cloud description is often ADF (Atlassian Document Format).
+ * This function extracts readable text from ADF JSON.
+ */
+function adfToText(node) {
+  if (!node) return "";
 
-  // Fetch issue from Jira using AP.request (runs inside Jira iframe)
-  AP.request({
-    url: `/rest/api/3/issue/${issueKey}?fields=description,summary`,
-    type: "GET",
-    success: function (responseText) {
-      const issue = JSON.parse(responseText);
-      const desc = issue?.fields?.description;
+  // If it's already a string (rare), return directly
+  if (typeof node === "string") return node;
 
-      // Jira Cloud description is usually ADF (object), not plain string
-      // For demo: show JSON if it's object
-      if (typeof desc === "string") {
-        currentDescEl.value = desc || "";
-      } else {
-        currentDescEl.value = desc ? JSON.stringify(desc, null, 2) : "";
-      }
+  // If it's an array of nodes
+  if (Array.isArray(node)) return node.map(adfToText).join("");
 
-      setStatus("✅ Loaded issue description.");
-    },
-    error: function (err) {
-      setStatus("❌ Failed to load issue. Check permissions/scopes.");
-      console.error(err);
-    },
+  // Text node
+  if (node.type === "text") return node.text || "";
+
+  // Hard break
+  if (node.type === "hardBreak") return "\n";
+
+  // Paragraph / heading / listItem etc - add line breaks between blocks
+  const blockTypes = new Set([
+    "paragraph",
+    "heading",
+    "blockquote",
+    "listItem",
+    "codeBlock",
+    "panel",
+    "tableRow",
+  ]);
+
+  const contentText = adfToText(node.content || []);
+
+  if (blockTypes.has(node.type)) return contentText + "\n";
+
+  return contentText;
+}
+function onGeminiClick(){
+  alert("Gemini Clicked")
+}
+function getIssueFromJira(issueKey) {
+  return new Promise((resolve, reject) => {
+    if (!window.AP) return reject(new Error("AP is not available. Load inside Jira."));
+    AP.request({
+      url: `/rest/api/3/issue/${issueKey}?fields=summary,description`,
+      type: "GET",
+      success: (responseText) => {
+        try {
+          resolve(JSON.parse(responseText));
+        } catch (e) {
+          reject(e);
+        }
+      },
+      error: (err) => reject(err),
+    });
   });
 }
 
-btnRefine.addEventListener("click", async () => {
+async function callGemini(prompt) {
+  const res = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "Gemini call failed");
+  return data.response || "";
+}
+
+btnCall.addEventListener("click", async () => {
+  if (!issueKey) {
+    setStatus("❌ Missing issueKey in URL");
+    return;
+  }
+
   try {
-    if (!issueKey) return;
-
     setLoading(true);
-    setStatus("Calling backend → Gemini…");
+    outputBox.value = "";
+    setStatus("1/3 Fetching current Jira description…");
 
-    const payload = {
-      issueKey,
-      description: currentDescEl.value,
-    };
+    // ✅ 1) Get current issue description from Jira
+    const issue = await getIssueFromJira(issueKey);
+    const summary = issue?.fields?.summary || "";
+    const descADF = issue?.fields?.description || null;
 
-    // Calls YOUR backend endpoint (same baseUrl domain)
-    const res = await fetch("/api/refine", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const descText = adfToText(descADF).trim();
+    if (!descText) {
+      setStatus("⚠️ Issue has no description. Still calling Gemini with summary.");
+    }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || "Refine failed");
+    // ✅ 2) Build prompt
+    const prompt =
+      `Analyze the input Jira ticket description and rewrite it in a structured and professional manner.\n\n` +
+      `Follow this format:\n` +
+      `1. Problem Summary\n` +
+      `2. Background\n` +
+      `3. Expected Outcome\n` +
+      `4. Acceptance Criteria\n\n` +
+      `Issue Key: ${issueKey}\n` +
+      `Summary: ${summary}\n\n` +
+      `Description:\n${descText || "(empty)"}\n`;
 
-    refinedDescEl.value = data.refinedText || "";
-    btnUpdate.disabled = !data.refinedText;
+    // show user what prompt is being used (optional)
+    promptBox.value = prompt;
 
-    setStatus("✅ Gemini output received.");
+    setStatus("2/3 Calling Gemini API…");
+
+    // ✅ 3) Call backend → Gemini
+    const geminiOutput = await callGemini(prompt);
+
+    // ✅ 4) Show output
+    outputBox.value = geminiOutput;
+    setStatus("✅ Done: Gemini output received.");
   } catch (e) {
     console.error(e);
-    setStatus("❌ " + e.message);
+    setStatus(
+      "❌ Failed. If description is not loading, check: Jira app scopes (READ) + JWT/auth setup. " +
+        (e?.message || "")
+    );
   } finally {
     setLoading(false);
   }
 });
-
-btnUpdate.addEventListener("click", () => {
-  const refined = refinedDescEl.value?.trim();
-  if (!refined) return;
-
-  setStatus("Updating Jira issue description…");
-
-  // IMPORTANT:
-  // Jira Cloud expects description as ADF, not plain string.
-  // For a quick demo, we’ll write a very simple ADF doc with one paragraph.
-  const adf = {
-    type: "doc",
-    version: 1,
-    content: [
-      { type: "paragraph", content: [{ type: "text", text: refined }] }
-    ],
-  };
-
-  AP.request({
-    url: `/rest/api/3/issue/${issueKey}`,
-    type: "PUT",
-    contentType: "application/json",
-    data: JSON.stringify({ fields: { description: adf } }),
-    success: function () {
-      setStatus("✅ Jira description updated!");
-    },
-    error: function (err) {
-      console.error(err);
-      setStatus("❌ Update failed (check WRITE scope + permissions).");
-    },
-  });
-});
-
-loadIssueDescription();

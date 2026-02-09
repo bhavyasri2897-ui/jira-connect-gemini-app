@@ -110,50 +110,80 @@ app.post("/api/gemini", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    if (!prompt || !prompt.trim()) return res.status(400).json({ error: "prompt required" });
-    if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY missing" });
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: "prompt required" });
+    }
 
-    // ✅ Prefer text model if available. If not, keep your bidi model.
-    const MODEL = process.env.GEMINI_MODEL || "models/gemini-pro";
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: "GEMINI_API_KEY missing" });
+    }
+
+    if (!process.env.GEMINI_MODEL) {
+      return res.status(500).json({ error: "GEMINI_MODEL missing" });
+    }
+
+    const MODEL = process.env.GEMINI_MODEL;
+
+    // ✅ Decide correct method
     const isBidi = MODEL.includes("native-audio-preview");
     const method = isBidi ? "bidiGenerateContent" : "generateContent";
 
     const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:${method}`;
 
-    const r = await fetchFn(url, {
+    console.log("➡️ Gemini call:", { MODEL, method });
+
+    const response = await fetchFn(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-goog-api-key": process.env.GEMINI_API_KEY
       },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }]
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
       })
     });
 
-    const data = await r.json();
+    const data = await response.json();
 
-    if (!r.ok) {
-      return res.status(r.status).json({
+    if (!response.ok) {
+      console.error("❌ Gemini API error:", data);
+      return res.status(response.status).json({
         error: data?.error?.message || "Gemini API error",
+        model: MODEL,
+        method,
         details: data
       });
     }
 
-    const text = (data?.candidates?.[0]?.content?.parts || [])
-      .map(p => p?.text)
-      .filter(Boolean)
-      .join("\n")
-      .trim();
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const text = parts.map(p => p?.text).filter(Boolean).join("\n").trim();
 
-    if (!text) return res.status(502).json({ error: "No text returned", details: data });
+    if (!text) {
+      console.error("❌ Gemini returned empty text:", data);
+      return res.status(502).json({
+        error: "Gemini returned no text",
+        model: MODEL,
+        method,
+        details: data
+      });
+    }
 
-    res.json({ response: text });
+    return res.json({ response: text });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gemini call crashed", details: String(err) });
+    console.error("🔥 Backend crash:", err);
+    return res.status(500).json({
+      error: "Gemini call crashed",
+      details: String(err)
+    });
   }
 });
+
 
 
 

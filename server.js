@@ -114,40 +114,41 @@ app.post("/api/gemini", async (req, res) => {
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({ error: "prompt is required" });
     }
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "GEMINI_API_KEY missing in env" });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: "GEMINI_API_KEY missing" });
     }
 
-    // ✅ Use a current model (fast + cheap)
-    const MODEL = "gemini-1.5-flash"; // you can also try "gemini-3-flash-preview"
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+    const MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025";
+    const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:bidiGenerateContent`;
 
-    const r = await fetch(url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
+        "x-goog-api-key": process.env.GEMINI_API_KEY
       },
       body: JSON.stringify({
         contents: [
           {
+            role: "user",
             parts: [{ text: prompt }]
           }
         ]
       })
     });
 
-    const data = await r.json();
+    const data = await response.json();
 
-    // ✅ IMPORTANT: if Gemini returns an error, show it
-    if (!r.ok) {
-      return res.status(r.status).json({
+    if (!response.ok) {
+      return res.status(response.status).json({
         error: data?.error?.message || "Gemini API error",
         details: data
       });
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // 🔑 bidiGenerateContent returns output slightly differently
+    const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text) {
       return res.status(502).json({
@@ -156,12 +157,14 @@ app.post("/api/gemini", async (req, res) => {
       });
     }
 
-    return res.json({ response: text });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: "Gemini call failed", details: String(e) });
+    res.json({ response: text });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gemini call failed" });
   }
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`✅ Running: http://localhost:${PORT}`);

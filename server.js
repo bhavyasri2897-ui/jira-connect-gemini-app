@@ -106,7 +106,6 @@ app.get("/render-refiner", (req, res) => {
 //     res.status(500).json({ error: "Gemini call failed" });
 //   }
 // });
-// ✅ Gemini API proxy (backend)
 app.post("/api/gemini", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -114,18 +113,19 @@ app.post("/api/gemini", async (req, res) => {
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({ error: "prompt is required" });
     }
-    if (!process.env.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return res.status(500).json({ error: "GEMINI_API_KEY missing" });
     }
 
     const MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025";
     const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:bidiGenerateContent`;
 
-    const response = await fetch(url, {
+    // ✅ IMPORTANT: use fetchFn (not fetch)
+    const response = await fetchFn(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": process.env.GEMINI_API_KEY
+        "x-goog-api-key": GEMINI_API_KEY
       },
       body: JSON.stringify({
         contents: [
@@ -139,30 +139,34 @@ app.post("/api/gemini", async (req, res) => {
 
     const data = await response.json();
 
+    // ✅ return REAL error (so UI shows it)
     if (!response.ok) {
+      console.error("❌ Gemini error:", data);
       return res.status(response.status).json({
         error: data?.error?.message || "Gemini API error",
         details: data
       });
     }
 
-    // 🔑 bidiGenerateContent returns output slightly differently
-    const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // ✅ Robust text extraction (bidi can return multiple parts)
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const text = parts.map(p => p?.text).filter(Boolean).join("\n").trim();
 
     if (!text) {
+      console.error("❌ Gemini returned no text:", data);
       return res.status(502).json({
         error: "Gemini returned no text",
         details: data
       });
     }
 
-    res.json({ response: text });
+    return res.json({ response: text });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gemini call failed" });
+    console.error("❌ /api/gemini crashed:", err);
+    return res.status(500).json({ error: "Gemini call failed", details: String(err) });
   }
 });
+
 
 
 

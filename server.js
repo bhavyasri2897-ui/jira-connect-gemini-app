@@ -55,101 +55,57 @@ app.post("/uninstalled", (req, res) => {
 // ✅ Connect descriptor
 app.get("/atlassian-connect.json", (req, res) => {
   const descriptor = {
-    key: "jira-gemini-connect-app-001",
-    name: "Gemini Jira Connect",
-    description:
-      "Plugin to generate stories within an epic, create test cases, and add a new button at the Sprint Board level and Backlog Level",
-    baseUrl: BASE_URL,
-
-    vendor: {
-      name: "Ascendion, Inc.",
-      url: "https://ascendion.com"
+    "apiVersion": 1,
+    "key": "aava-refiner-v4",
+    "name": "AAVA Description Refiner",
+    "description": "Refine Jira issue descriptions using Gemini AI",
+    "vendor": {
+        "name": "AAVA",
+        "url": "https://example.com"
     },
-
-    authentication: { type: "none" },
-    apiVersion: 1,
-    apiMigrations: { gdpr: true },
-
-    scopes: ["read", "write", "act_as_user"],
-
-    lifecycle: {
-      installed: "/installed",
-      uninstalled: "/uninstalled"
+    "baseUrl": "https://jira-connect-gemini-app.onrender.com",
+    "links": {
+        "self": "https://jira-connect-gemini-app.onrender.com/atlassian-connect.json",
     },
-
-    modules: {
-      jiraIssueContents: [
-        {
-          key: "gemini-issue-panel",
-          name: { value: "Gemini AI" },
-          icon: { url: "/public/icon.png" },
-
-          // ✅ IMPORTANT: file name must match exactly
-          // If your file is issue-pannel.html then keep that spelling
-          url: "/public/issue-pannel.html",
-
-          location: "atl.jira.view.issue.right.context"
-        }
-      ]
+    "authentication": {
+        "type": "jwt"
+    },
+    "apiMigrations": {
+        "context-qsh": true
+    },
+    "lifecycle": {
+        "installed": "/installed"
+    },
+    "scopes": [
+        "READ",
+        "WRITE"
+    ],
+    "modules": {
+        "jiraIssueContents": [
+            {
+                "key": "aava-refiner-left",
+                "name": {
+                    "value": "Refine with AAVA"
+                },
+                "target": {
+                    "type": "web_panel",
+                    "url": "/render-refiner?issueKey={issue.key}"
+                },
+                "icon": {
+                    "width": 16,
+                    "height": 16,
+                    "url": "/icon.png"
+                },
+                "tooltip": {
+                    "value": "Refine issue description with Gemini AI"
+                }
+            }
+        ]
     }
-  };
-
+}
   res.status(200).json(descriptor);
 });
 
-// app.get("/atlassian-connect.json", (req, res) => {
-//   const descriptor = {
-//     name: "A.AVA Digital Ascender",
-//     description:
-//       "Plugin to generate stories within an epic, create test cases, and add a new button at the Sprint Board level and Backlog Level",
-
-//     key: "AVA.Ascender.Plugin-v1",
-//     baseUrl: BASE_URL,
-
-//     vendor: {
-//       name: "Ascendion, Inc.",
-//       url: "https://Ascendion.com"
-//     },
-
-//     authentication: { type: "none" },
-
-//     apiMigrations: { gdpr: true },
-
-//     scopes: ["read", "write", "act_as_user", "admin"],
-
-//     apiVersion: 1,
-
-//     modules: {
-//       jiraIssueContents: [
-//         {
-//           key: "my-issue-content-panel",
-//           name: { value: "Digital Ascender" },
-//           icon: { url: "/public/icon.png" },
-//           url: "/public/issue-panel.html",
-//           location: "atl.jira.view.issue.right.context",
-//           tooltip: { value: "A.AVA Digital Ascender" },
-//           jiraNativeAppsEnabled: false
-//         }
-//       ],
-
-//       configurePage: {
-//         key: "configuration",
-//         url: "/configure",
-//         name: { value: "Configure A.AVA Digital Ascender" }
-//       },
-
-//     //   webhooks: [
-//     //     {
-//     //       event: "jira:issue_updated",
-//     //       url: "/issue-updated",
-//     //       excludeBody: false
-//     //     }
-//     //   ]
-//     }
-//   };
-
-//   res.status(200).type("application/json").json(descriptor);
-// });
 
 
 
